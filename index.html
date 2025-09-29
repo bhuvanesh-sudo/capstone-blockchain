@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Food Traceability QR Demo</title>
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #qrcode { margin: 20px 0; }
+    .card { border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <h2>Frozen Food Traceability – QR Scan Demo</h2>
+
+  <div class="card">
+    <h3>1. Generate QR</h3>
+    <input type="text" id="lotInput" placeholder="Enter Lot Number (e.g. LOT123)" />
+    <button onclick="generateQR()">Generate QR</button>
+    <div id="qrcode"></div>
+    <p><b>QR Token:</b> <span id="qrToken"></span></p>
+  </div>
+
+  <div class="card">
+    <h3>2. Simulate Scan</h3>
+    <input type="text" id="scanToken" placeholder="Paste QR token" />
+    <button onclick="lookupProduct()">Lookup Product</button>
+    <pre id="result"></pre>
+  </div>
+
+  <script>
+    // --- Replace with your contract details ---
+    const contractAddress = "YOUR_DEPLOYED_CONTRACT_ADDRESS";
+    const abi = [ /* paste the ABI of FoodTraceabilityFull here (from Remix compile) */ ];
+
+    let web3;
+    let contract;
+
+    async function init() {
+      if (window.ethereum) {
+        web3 = new Web3(window.ethereum);
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        contract = new web3.eth.Contract(abi, contractAddress);
+      } else {
+        alert("Please install MetaMask!");
+      }
+    }
+    init();
+
+    // --- Generate QR (calls contract.generateQRToken) ---
+    async function generateQR() {
+      const lot = document.getElementById("lotInput").value;
+      if (!lot) return alert("Enter lot number first");
+
+      const accounts = await web3.eth.getAccounts();
+      const token = await contract.methods.generateQRToken(lot).send({ from: accounts[0] });
+
+      // Fetch latest QR token stored in contract for this lot
+      const qr = await contract.methods.consumerLookupByLot(lot).call();
+      const latestToken = qr[5]; // 6th return value = latest QR
+
+      document.getElementById("qrToken").innerText = latestToken;
+
+      // Render QR code
+      document.getElementById("qrcode").innerHTML = "";
+      new QRCode(document.getElementById("qrcode"), latestToken);
+    }
+
+    // --- Simulate consumer scanning QR ---
+    async function lookupProduct() {
+      const token = document.getElementById("scanToken").value;
+      if (!token) return alert("Paste a QR token first");
+
+      const data = await contract.methods.consumerLookupByQR(token).call();
+      const [lot, name, origin, certs, stage, handler] = data;
+      const stages = ["Created","Vendor","Manufacturing","Logistics","Retail","Completed"];
+
+      document.getElementById("result").innerText =
+        "Lot: " + lot + "\n" +
+        "Name: " + name + "\n" +
+        "Origin: " + origin + "\n" +
+        "Certifications: " + certs + "\n" +
+        "Stage: " + stages[stage] + "\n" +
+        "Current Handler: " + handler;
+    }
+  </script>
+</body>
+</html>
