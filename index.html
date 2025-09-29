@@ -1,37 +1,40 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>Food Traceability QR Demo</title>
+  <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    #qrcode { margin: 20px 0; }
-    .card { border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-  </style>
 </head>
 <body>
-  <h2>Frozen Food Traceability – QR Scan Demo</h2>
+  <header>Frozen Food Traceability – QR Portal</header>
+  <main>
+    <div class="card">
+      <h3>1. Generate QR Code</h3>
+      <p>Enter a lot number to generate a blockchain-backed QR code for consumers.</p>
+      <input type="text" id="lotInput" placeholder="Enter Lot Number (e.g. LOT123)" />
+      <button onclick="generateQR()">Generate QR</button>
+      <div id="qrcode"></div>
+      <p><b>QR Token:</b> <span id="qrToken"></span></p>
+    </div>
 
-  <div class="card">
-    <h3>1. Generate QR</h3>
-    <input type="text" id="lotInput" placeholder="Enter Lot Number (e.g. LOT123)" />
-    <button onclick="generateQR()">Generate QR</button>
-    <div id="qrcode"></div>
-    <p><b>QR Token:</b> <span id="qrToken"></span></p>
-  </div>
-
-  <div class="card">
-    <h3>2. Simulate Scan</h3>
-    <input type="text" id="scanToken" placeholder="Paste QR token" />
-    <button onclick="lookupProduct()">Lookup Product</button>
-    <pre id="result"></pre>
-  </div>
+    <div class="card">
+      <h3>2. Simulate Scan</h3>
+      <p>Paste a QR token to fetch product info from the blockchain.</p>
+      <input type="text" id="scanToken" placeholder="Paste QR token" />
+      <button onclick="lookupProduct()">Lookup Product</button>
+      <pre id="result"></pre>
+    </div>
+  </main>
+  <footer>
+    &copy; 2025 Frozen Food Traceability | Powered by Ethereum & QR Codes
+  </footer>
 
   <script>
     // --- Replace with your contract details ---
     const contractAddress = "YOUR_DEPLOYED_CONTRACT_ADDRESS";
-    const abi = [ /* paste the ABI of FoodTraceabilityFull here (from Remix compile) */ ];
+    const abi = [ /* paste ABI from Remix compile */ ];
 
     let web3;
     let contract;
@@ -47,26 +50,26 @@
     }
     init();
 
-    // --- Generate QR (calls contract.generateQRToken) ---
+    // Generate QR
     async function generateQR() {
       const lot = document.getElementById("lotInput").value;
       if (!lot) return alert("Enter lot number first");
 
       const accounts = await web3.eth.getAccounts();
-      const token = await contract.methods.generateQRToken(lot).send({ from: accounts[0] });
+      await contract.methods.generateQRToken(lot).send({ from: accounts[0] });
 
-      // Fetch latest QR token stored in contract for this lot
+      // Get latest QR token
       const qr = await contract.methods.consumerLookupByLot(lot).call();
-      const latestToken = qr[5]; // 6th return value = latest QR
+      const latestToken = qr[5];
 
       document.getElementById("qrToken").innerText = latestToken;
 
-      // Render QR code
+      // Render QR
       document.getElementById("qrcode").innerHTML = "";
       new QRCode(document.getElementById("qrcode"), latestToken);
     }
 
-    // --- Simulate consumer scanning QR ---
+    // Lookup product by QR token
     async function lookupProduct() {
       const token = document.getElementById("scanToken").value;
       if (!token) return alert("Paste a QR token first");
