@@ -6,7 +6,7 @@ pragma solidity ^0.8.20;
  * @notice End-to-end frozen food traceability with QR simulation and gamification badges.
  *
  * How to use in Remix:
- * 1. Create `FoodTraceabilityFull.sol` and paste this code.
+ * 1. Create `FoodTraceability.sol` and paste this code.
  * 2. Compile with Solidity 0.8.20.
  * 3. Deploy (account deploying becomes owner).
  * 4. Use owner-only functions to assign roles, register products, and optionally set thresholds.

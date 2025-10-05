@@ -1,91 +1,92 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Food Traceability QR Demo</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Rich Products — Frozen Food Traceability</title>
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 <body>
-  <header>Frozen Food Traceability – QR Portal</header>
-  <main>
-    <div class="card">
-      <h3>1. Generate QR Code</h3>
-      <p>Enter a lot number to generate a blockchain-backed QR code for consumers.</p>
-      <input type="text" id="lotInput" placeholder="Enter Lot Number (e.g. LOT123)" />
-      <button onclick="generateQR()">Generate QR</button>
-      <div id="qrcode"></div>
-      <p><b>QR Token:</b> <span id="qrToken"></span></p>
-    </div>
+  <header class="topbar">
+    <div class="brand">Rich Products</div>
+    <div class="tag">From farm to fork — complete visibility</div>
+    <button id="connectBtn" class="btn">Connect Wallet</button>
+  </header>
 
-    <div class="card">
-      <h3>2. Simulate Scan</h3>
-      <p>Paste a QR token to fetch product info from the blockchain.</p>
-      <input type="text" id="scanToken" placeholder="Paste QR token" />
-      <button onclick="lookupProduct()">Lookup Product</button>
-      <pre id="result"></pre>
+  <section class="hero">
+    <img src="https://images.unsplash.com/photo-1506806732259-39c2d0268443?auto=format&fit=crop&w=1600&q=60" alt="Frozen food" />
+    <div class="hero-text">
+      <h1>Frozen Food Traceability</h1>
+      <p>Complete visibility across the supply chain — farm to fork. Scan or enter lot numbers to view history, temperature logs and certifications.</p>
     </div>
+  </section>
+
+  <main class="container large">
+    <section class="left">
+      <div class="card search-card">
+        <div class="auth-row">
+          <div class="welcome">Welcome — <span id="welcomeUser">Guest</span></div>
+          <div class="auth-buttons">
+            <button id="loginBtn" class="btn">Login</button>
+            <button id="signupBtn" class="btn">Sign Up</button>
+            <button id="logoutBtn" class="btn hidden">Logout</button>
+          </div>
+        </div>
+        <h2>Find Product</h2>
+        <input id="lotInput" placeholder="Enter lot number or scan QR (e.g. LOT-1001)" />
+        <div class="row">
+          <button id="lookupBtn" class="btn primary">Lookup</button>
+          <button id="generateQRBtn" class="btn">Generate QR</button>
+          <button id="scanQRBtn" class="btn">Scan (camera)</button>
+        </div>
+        <div id="qrcode" class="qrcode"></div>
+        <video id="qrVideo" class="hidden"></video>
+      </div>
+
+      <div class="card product-card" id="productCard">
+        <h3 id="productName">Product Name</h3>
+        <div class="meta">
+          <div><strong>Origin:</strong> <span id="productOrigin">-</span></div>
+          <div><strong>Certifications:</strong> <span id="productCerts">-</span></div>
+          <div><strong>Current Stage:</strong> <span id="productStage">-</span></div>
+        </div>
+
+        <div class="timeline" id="timeline"></div>
+
+        <h4>IoT Temperature Logs</h4>
+        <ul id="iotLogs" class="iot-list"></ul>
+
+        <div class="row">
+          <button id="logIoTBtn" class="btn">Simulate IoT Log</button>
+          <button id="scanBtn" class="btn success">I'm a Consumer — Scan</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="right">
+      <div class="card leaderboard">
+        <h3>Leaderboard</h3>
+        <ul id="leaderboardList"></ul>
+        <div class="your-points">Your session points: <span id="sessionPoints">0</span></div>
+      </div>
+
+      <div class="card badges">
+        <h3>Badges</h3>
+        <div id="badgesList" class="badges-grid"></div>
+      </div>
+
+      <div class="card about">
+        <h4>About</h4>
+        <p>Demo integrates a Solidity contract (optional). Use MetaMask to interact or try the simulated demo mode.</p>
+  <small>Contract file: <code>FoodTraceability.sol</code></small>
+      </div>
+    </aside>
   </main>
-  <footer>
-    &copy; 2025 Frozen Food Traceability | Powered by Ethereum & QR Codes
-  </footer>
 
-  <script>
-    // --- Replace with your contract details ---
-    const contractAddress = "YOUR_DEPLOYED_CONTRACT_ADDRESS";
-    const abi = [ /* paste ABI from Remix compile */ ];
+  <footer class="footer">© Rich Products — Demo</footer>
 
-    let web3;
-    let contract;
-
-    async function init() {
-      if (window.ethereum) {
-        web3 = new Web3(window.ethereum);
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-        contract = new web3.eth.Contract(abi, contractAddress);
-      } else {
-        alert("Please install MetaMask!");
-      }
-    }
-    init();
-
-    // Generate QR
-    async function generateQR() {
-      const lot = document.getElementById("lotInput").value;
-      if (!lot) return alert("Enter lot number first");
-
-      const accounts = await web3.eth.getAccounts();
-      await contract.methods.generateQRToken(lot).send({ from: accounts[0] });
-
-      // Get latest QR token
-      const qr = await contract.methods.consumerLookupByLot(lot).call();
-      const latestToken = qr[5];
-
-      document.getElementById("qrToken").innerText = latestToken;
-
-      // Render QR
-      document.getElementById("qrcode").innerHTML = "";
-      new QRCode(document.getElementById("qrcode"), latestToken);
-    }
-
-    // Lookup product by QR token
-    async function lookupProduct() {
-      const token = document.getElementById("scanToken").value;
-      if (!token) return alert("Paste a QR token first");
-
-      const data = await contract.methods.consumerLookupByQR(token).call();
-      const [lot, name, origin, certs, stage, handler] = data;
-      const stages = ["Created","Vendor","Manufacturing","Logistics","Retail","Completed"];
-
-      document.getElementById("result").innerText =
-        "Lot: " + lot + "\n" +
-        "Name: " + name + "\n" +
-        "Origin: " + origin + "\n" +
-        "Certifications: " + certs + "\n" +
-        "Stage: " + stages[stage] + "\n" +
-        "Current Handler: " + handler;
-    }
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>

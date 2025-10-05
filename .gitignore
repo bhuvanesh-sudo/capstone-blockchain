@@ -1,1 +1,10 @@
-# index1.html
+# index1.html (duplicate demo)
+index1.html
+
+# Ignore compiled artifacts and local state
+artifacts/
+artifacts/*
+build-info/
+.states/
+node_modules/
+*.env
