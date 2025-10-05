@@ -1,38 +1,138 @@
 # Rich Products — Frozen Food Supply Chain Traceability (Demo)
-# Rich Products — Frozen Food Supply Chain Traceability (Demo)
 
-This repository contains a demo blockchain-based traceability system for frozen food items.
+This repository is a demo traceability system for frozen-food items. It includes a Solidity contract and a Web3-enabled frontend with QR generation, IoT simulation, badges and a leaderboard. The frontend supports an in-page Login / Sign Up modal and can persist users/leaderboard to a cloud JSON store (MockAPI/JSONBin) or to browser localStorage.
 
-Contents
-- `FoodTraceability.sol` — Main Solidity smart contract (full feature set).
-- `FoodTraceabilityFull.sol` - REMOVED / neutralized (use `FoodTraceability.sol` as canonical contract).
-- `index.html`, `styles.css`, `app.js` — Frontend demo (Web3 integration + QR code generator, IoT simulation, badges, leaderboard). The frontend now includes a login/signup modal and optional cloud JSON persistence.
+This README includes step-by-step setup and testing instructions.
 
-Quickstart (Frontend-only demo)
-1. Open `index.html` in a browser. For full Web3 interactions use a local web server (e.g., `npx http-server` or VSCode Live Server) to avoid camera/security restrictions.
-2. Use the input box to enter a lot number (examples: `LOT-1001`, `LOT-2002`) and click Lookup.
-3. Generate QR, simulate IoT logs, and press "I'm a Consumer — Scan" to award session points and see badges.
+---
 
-Web3 / Contract notes
-- To interact with the Solidity contract on a network, deploy `FoodTraceability.sol` (Solidity ^0.8.x) using Remix, Hardhat, or Truffle.
-- After deploying, paste the deployed contract address into `app.js` in the `CONTRACT_ADDRESS` constant.
-- The frontend attempts to detect whether the deployed contract conforms to the simple or extended ABI and adapts calls accordingly.
-- Use MetaMask to connect and send transactions.
+Prerequisites
 
-Security & Limitations
-- This is a demo. The contract uses simple role checks and is not production hardened.
-- Camera QR scanning is a visual/demo helper — no full QR decoding library is included. For production use, integrate ZXing or jsQR.
+- Node.js & npm (for local server or optional Hardhat): https://nodejs.org/
+- MetaMask or compatible Web3 wallet installed in your browser.
+- Recommended: a local HTTP server or VSCode Live Server (camera and MetaMask require http(s) context).
 
-Files to consider updating
-- `CONTRACT_ADDRESS` and `API_BASE_URL` in `app.js`.
-- `DEMO_PRODUCTS` in `app.js` for more sample lots.
+Quick steps summary
 
-Auth & cloud persistence
-- The app uses an in-page Login / Sign Up modal (click Login or Sign Up in the main card).
-- When `API_BASE_URL` is set the app will attempt to use REST endpoints under that base URL (e.g. `${API_BASE_URL}/users` and `${API_BASE_URL}/leaderboard`). Otherwise it falls back to `localStorage` keys: `rpf_users`, `rpf_user`, `rpf_leaderboard`.
+1. Serve the frontend locally (npx http-server or Live Server).
+2. (Optional) Deploy `FoodTraceability.sol` with Remix or Hardhat and copy the contract address.
+3. Configure `CONTRACT_ADDRESS` and `API_BASE_URL` in `app.js`.
+4. Open the UI, sign up or log in, then lookup lots, simulate IoT logs and scan as a consumer to update the leaderboard.
 
-Example MockAPI setup (quick)
-- Create a MockAPI project and add two resources: `users` and `leaderboard`.
-- Set `API_BASE_URL` in `app.js` to the base URL MockAPI gives you (e.g. `https://xxxxx.mockapi.io`). The frontend will POST to `${API_BASE_URL}/users` to signup and `${API_BASE_URL}/leaderboard` to persist leaderboard entries.
+Detailed step-by-step
 
-License: MIT
+1) Serve the frontend locally
+
+PowerShell commands:
+
+```powershell
+# from repo root
+npx http-server -p 8080
+
+```
+
+Alternatively use the VS Code Live Server extension.
+
+2) Deploy the Solidity contract
+
+Remix (fast):
+
+- Open https://remix.ethereum.org
+- Create a new file and paste `FoodTraceability.sol` contents.
+- Compile using Solidity ^0.8.x.
+- Deploy using Injected Web3 (MetaMask) or the JavaScript VM for local testing.
+- Copy the deployed contract address.
+
+Hardhat (repeatable local/dev):
+
+```powershell
+mkdir hf-deploy; cd hf-deploy
+npm init -y
+npm install --save-dev hardhat @nomiclabs/hardhat-ethers ethers
+npx hardhat # choose 'create a javascript project'
+```
+
+- Copy `FoodTraceability.sol` into `hf-deploy/contracts/`.
+- Add a simple deploy script `scripts/deploy.js` (example below).
+- Run a local node and deploy:
+
+```powershell
+npx hardhat node
+npx hardhat run scripts/deploy.js --network localhost
+```
+
+Example deploy script (scripts/deploy.js):
+
+```js
+async function main(){
+	const [deployer] = await ethers.getSigners();
+	console.log('Deploying with', deployer.address);
+	const Factory = await ethers.getContractFactory('FoodTraceability');
+	const c = await Factory.deploy();
+	await c.deployed();
+	console.log('Deployed at', c.address);
+}
+main().catch(e=>{ console.error(e); process.exit(1); });
+```
+
+3) Configure the frontend
+
+- Edit `d:\SemV\BlockChain\capstone-blockchain\app.js`.
+- Set `CONTRACT_ADDRESS` to your deployed contract address (or leave empty to run demo mode).
+- Optionally set `API_BASE_URL` to your MockAPI/JSONBin base URL to enable cloud persistence.
+
+At the top of `app.js`:
+
+```js
+const CONTRACT_ADDRESS = "0x..."; // set when contract is deployed
+const API_BASE_URL = ""; // e.g. https://xxxxx.mockapi.io
+```
+
+4) (Optional) Create a MockAPI project for cloud persistence
+
+- Create a free MockAPI account and project.
+- Add two resources named `users` and `leaderboard`.
+- Copy the base URL MockAPI gives you (e.g. `https://xxxxx.mockapi.io/api/v1`) and set it as `API_BASE_URL`.
+
+How the app uses the API:
+
+- POST `${API_BASE_URL}/users` to create users.
+- GET `${API_BASE_URL}/users?username={username}` to lookup users on login.
+- POST `${API_BASE_URL}/leaderboard` to persist leaderboard entries.
+
+If API calls fail or `API_BASE_URL` is empty, the app uses localStorage keys: `rpf_users`, `rpf_user`, `rpf_leaderboard`.
+
+5) Run and test the UI
+
+- Start the local server and open the page in a browser.
+- Click Login or Sign Up (in the top-left of the main card) and create an account.
+- Enter `LOT-1001` or `LOT-2002` and click Lookup to view a demo product and IoT logs.
+- Click Generate QR, Simulate IoT Log, and "I'm a Consumer — Scan" to award points and update the leaderboard.
+- If `API_BASE_URL` is configured, leaderboard entries are POSTed to the remote API; otherwise they are saved in `localStorage`.
+
+6) Optional: add live QR decoding (jsQR)
+
+The demo generates QR images and shows a camera preview. To automatically decode QR codes and auto-lookup:
+
+- Add jsQR (CDN):
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+```
+
+- In `app.js` add a small canvas and poll video frames (e.g., every 200-300ms), call `jsQR()` on the imageData and when a result is found, set `lotInput.value` and call `lookupProduct()`.
+
+If you'd like, I can implement the jsQR integration and the code to wire it into the camera preview.
+
+7) Troubleshooting
+
+- MetaMask won't connect: ensure page is served over http(s) and MetaMask is unlocked.
+- Contract calls fail: verify `CONTRACT_ADDRESS` points to the correct network and that MetaMask network matches the deployed network.
+- LocalStorage issues: open DevTools -> Application -> Local Storage to inspect `rpf_users` and `rpf_leaderboard`.
+
+Security notes & next steps
+
+- This demo stores passwords in plaintext when using MockAPI/localStorage — suitable only for demos. For production, implement proper authentication (token-based, hashed passwords) and a secure backend.
+- Suggested next work: add jsQR live decoding, add a small backend for secure accounts & leaderboard, or add a Hardhat project inside the repo for repeatable testing.
+
+If you want, I'll implement one of the suggested next steps (jsQR, MockAPI wiring, or Hardhat example) — tell me which and I will follow up with code changes.
