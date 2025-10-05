@@ -1,11 +1,12 @@
 # Rich Products — Frozen Food Supply Chain Traceability (Demo)
+# Rich Products — Frozen Food Supply Chain Traceability (Demo)
 
 This repository contains a demo blockchain-based traceability system for frozen food items.
 
 Contents
 - `FoodTraceability.sol` — Main Solidity smart contract (full feature set).
-- `FoodTraceabilityFull.sol` — DEPRECATED simplified contract (kept for reference).
-- `index.html`, `styles.css`, `app.js` — Frontend demo (Web3 integration + QR code generator, IoT simulation, badges, leaderboard). The frontend now includes a simple login/signup flow and optional cloud JSON persistence.
+- `FoodTraceabilityFull.sol` - REMOVED / neutralized (use `FoodTraceability.sol` as canonical contract).
+- `index.html`, `styles.css`, `app.js` — Frontend demo (Web3 integration + QR code generator, IoT simulation, badges, leaderboard). The frontend now includes a login/signup modal and optional cloud JSON persistence.
 
 Quickstart (Frontend-only demo)
 1. Open `index.html` in a browser. For full Web3 interactions use a local web server (e.g., `npx http-server` or VSCode Live Server) to avoid camera/security restrictions.
@@ -15,7 +16,7 @@ Quickstart (Frontend-only demo)
 Web3 / Contract notes
 - To interact with the Solidity contract on a network, deploy `FoodTraceability.sol` (Solidity ^0.8.x) using Remix, Hardhat, or Truffle.
 - After deploying, paste the deployed contract address into `app.js` in the `CONTRACT_ADDRESS` constant.
-- The frontend auto-detects whether the deployed contract conforms to the simpler ABI or the extended ABI and adapts calls accordingly.
+- The frontend attempts to detect whether the deployed contract conforms to the simple or extended ABI and adapts calls accordingly.
 - Use MetaMask to connect and send transactions.
 
 Security & Limitations
@@ -27,6 +28,11 @@ Files to consider updating
 - `DEMO_PRODUCTS` in `app.js` for more sample lots.
 
 Auth & cloud persistence
-- The frontend contains a minimal login/signup flow (client-side demo). To persist accounts and leaderboard to a cloud JSON store, set `API_BASE_URL` in `app.js` to your MockAPI/JSONBin endpoint. If empty, the app uses `localStorage`.
+- The app uses an in-page Login / Sign Up modal (click Login or Sign Up in the main card).
+- When `API_BASE_URL` is set the app will attempt to use REST endpoints under that base URL (e.g. `${API_BASE_URL}/users` and `${API_BASE_URL}/leaderboard`). Otherwise it falls back to `localStorage` keys: `rpf_users`, `rpf_user`, `rpf_leaderboard`.
+
+Example MockAPI setup (quick)
+- Create a MockAPI project and add two resources: `users` and `leaderboard`.
+- Set `API_BASE_URL` in `app.js` to the base URL MockAPI gives you (e.g. `https://xxxxx.mockapi.io`). The frontend will POST to `${API_BASE_URL}/users` to signup and `${API_BASE_URL}/leaderboard` to persist leaderboard entries.
 
 License: MIT

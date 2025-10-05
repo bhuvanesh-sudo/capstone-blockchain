@@ -34,6 +34,7 @@
             <button id="logoutBtn" class="btn hidden">Logout</button>
           </div>
         </div>
+      
         <h2>Find Product</h2>
         <input id="lotInput" placeholder="Enter lot number or scan QR (e.g. LOT-1001)" />
         <div class="row">
@@ -86,7 +87,25 @@
   </main>
 
   <footer class="footer">© Rich Products — Demo</footer>
+  
+    <!-- Auth modal -->
+    <div id="authModal" class="modal hidden" aria-hidden="true">
+      <div class="modal-backdrop" id="authBackdrop"></div>
+      <div class="modal-panel">
+        <h3 id="authTitle">Login</h3>
+        <form id="authForm">
+          <label for="authUsername">Username</label>
+          <input id="authUsername" name="username" type="text" autocomplete="username" required />
+          <label for="authPassword">Password</label>
+          <input id="authPassword" name="password" type="password" autocomplete="current-password" required />
+          <div class="row" style="margin-top:12px;">
+            <button id="authSubmit" class="btn primary">Submit</button>
+            <button id="authCancel" type="button" class="btn">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
-  <script src="app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

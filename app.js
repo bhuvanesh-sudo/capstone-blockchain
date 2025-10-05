@@ -64,9 +64,29 @@ async function init() {
   document.getElementById('scanBtn').onclick = consumerScan;
   document.getElementById('connectBtn').onclick = connectWallet;
   // auth UI
-  const loginBtn = document.getElementById('loginBtn'); if(loginBtn) loginBtn.onclick = showLogin;
-  const signupBtn = document.getElementById('signupBtn'); if(signupBtn) signupBtn.onclick = showSignup;
+  const loginBtn = document.getElementById('loginBtn'); if(loginBtn) loginBtn.onclick = ()=>openAuthModal('login');
+  const signupBtn = document.getElementById('signupBtn'); if(signupBtn) signupBtn.onclick = ()=>openAuthModal('signup');
   const logoutBtn = document.getElementById('logoutBtn'); if(logoutBtn) logoutBtn.onclick = logout;
+
+  // auth modal handlers
+  const authModal = document.getElementById('authModal');
+  const authForm = document.getElementById('authForm');
+  const authTitle = document.getElementById('authTitle');
+  const authSubmit = document.getElementById('authSubmit');
+  const authCancel = document.getElementById('authCancel');
+  if(authCancel) authCancel.onclick = closeAuthModal;
+  if(authForm) authForm.addEventListener('submit', async (ev)=>{
+    ev.preventDefault();
+    const username = document.getElementById('authUsername').value.trim();
+    const password = document.getElementById('authPassword').value;
+    if(!username || !password) return alert('Username and password required');
+    if(authModal.dataset.mode === 'signup'){
+      await signup(username,password);
+    } else {
+      await login(username,password);
+    }
+    closeAuthModal();
+  });
 
   // restore saved user
   const saved = localStorage.getItem('rpf_user'); if(saved){ try{ currentUser = JSON.parse(saved); onLoginSuccess(currentUser); }catch(e){} }
@@ -319,15 +339,11 @@ function renderLeaderboardWith(list){
 
 // ------------------ Auth & persistence ------------------
 function showLogin(){
-  const username = prompt('Username'); if(!username) return;
-  const password = prompt('Password'); if(!password) return;
-  login(username,password);
+  openAuthModal('login');
 }
 
 function showSignup(){
-  const username = prompt('Choose a username'); if(!username) return;
-  const password = prompt('Choose a password'); if(!password) return;
-  signup(username,password);
+  openAuthModal('signup');
 }
 
 async function signup(username,password){
@@ -359,6 +375,20 @@ async function login(username,password){
 function logout(){ currentUser=null; localStorage.removeItem('rpf_user'); document.getElementById('welcomeUser').innerText='Guest'; document.getElementById('logoutBtn').classList.add('hidden'); renderLeaderboardWith(LEADERBOARD); }
 
 function onLoginSuccess(user){ document.getElementById('welcomeUser').innerText = user.username; document.getElementById('logoutBtn').classList.remove('hidden'); loadUserLeaderboard(); }
+
+function openAuthModal(mode){
+  const modal = document.getElementById('authModal');
+  if(!modal) return;
+  modal.classList.remove('hidden');
+  modal.dataset.mode = mode;
+  document.getElementById('authUsername').value = '';
+  document.getElementById('authPassword').value = '';
+  document.getElementById('authTitle').innerText = mode === 'signup' ? 'Create account' : 'Login';
+}
+
+function closeAuthModal(){
+  const modal = document.getElementById('authModal'); if(!modal) return; modal.classList.add('hidden');
+}
 
 async function loadUserLeaderboard(){
   if(API_BASE_URL){
