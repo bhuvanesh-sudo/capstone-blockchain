@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Food Traceability QR Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: #f4f9f9;
+      margin: 0;
+      padding: 0;
+      color: #333;
+    }
+    header {
+      background: #0077b6;
+      color: white;
+      padding: 20px;
+      text-align: center;
+      font-size: 22px;
+      font-weight: 600;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    main {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      padding: 30px;
+    }
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    h3 {
+      margin-top: 0;
+      color: #0077b6;
+    }
+    input {
+      padding: 10px;
+      width: 80%;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    button {
+      background: #0096c7;
+      color: white;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+    }
+    button:hover {
+      background: #023e8a;
+    }
+    #qrcode {
+      margin: 15px 0;
+    }
+    pre {
+      background: #f1f1f1;
+      padding: 10px;
+      border-radius: 8px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    footer {
+      background: #0077b6;
+      color: white;
+      text-align: center;
+      padding: 15px;
+      font-size: 14px;
+    }
+    /* Scoreboard */
+    .scoreboard {
+      grid-column: span 2;
+      background: white;
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+    th, td {
+      border-bottom: 1px solid #eee;
+      padding: 12px;
+      text-align: center;
+    }
+    th {
+      background: #0077b6;
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <header>Frozen Food Traceability – QR & Rewards Portal</header>
+
+  <main>
+    <div class="card">
+      <h3>1. Generate QR Code</h3>
+      <p>Enter a lot number to generate a blockchain-backed QR code.</p>
+      <input type="text" id="lotInput" placeholder="Enter Lot Number (e.g. LOT123)" />
+      <button onclick="generateQR()">Generate QR</button>
+      <div id="qrcode"></div>
+      <p><b>QR Token:</b> <span id="qrToken"></span></p>
+    </div>
+
+    <div class="card">
+      <h3>2. Simulate Scan</h3>
+      <p>Paste a QR token to fetch product info from blockchain.</p>
+      <input type="text" id="scanToken" placeholder="Paste QR token" />
+      <button onclick="lookupProduct()">Lookup Product</button>
+      <pre id="result"></pre>
+    </div>
+
+    <div class="scoreboard">
+      <h3>🌍 Sustainability Leaderboard</h3>
+      <p>Earn points for actions like generating QR, scanning, and recycling initiatives.</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>User</th>
+            <th>Points</th>
+            <th>Badges</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboard">
+          <!-- Hardcoded demo data -->
+          <tr><td>1</td><td>Alice</td><td>120</td><td>♻️ Recycler</td></tr>
+          <tr><td>2</td><td>Bob</td><td>95</td><td>🏆 Gold QR</td></tr>
+          <tr><td>3</td><td>Charlie</td><td>80</td><td>🌱 Eco Friend</td></tr>
+        </tbody>
+      </table>
+      <p><b>Your Score:</b> <span id="userScore">0</span> points</p>
+    </div>
+  </main>
+
+  <footer>
+    &copy; 2025 Frozen Food Traceability | Gamified for a Greener Future
+  </footer>
+
+  <script>
+    let userScore = 0;
+
+    // Demo blockchain contract placeholder
+    const contractAddress = "YOUR_DEPLOYED_CONTRACT_ADDRESS";
+    const abi = [ /* ABI here */ ];
+    let web3, contract;
+
+    async function init() {
+      if (window.ethereum) {
+        web3 = new Web3(window.ethereum);
+        await window.ethereum.request({ method: "eth_requestAccounts" });
+        contract = new web3.eth.Contract(abi, contractAddress);
+      }
+    }
+    init();
+
+    // Generate QR
+    async function generateQR() {
+      const lot = document.getElementById("lotInput").value;
+      if (!lot) return alert("Enter lot number first");
+
+      // DEMO token generation
+      const token = "0x" + Math.random().toString(16).substring(2,10) + Date.now().toString(16);
+      document.getElementById("qrToken").innerText = token;
+      document.getElementById("qrcode").innerHTML = "";
+      new QRCode(document.getElementById("qrcode"), token);
+
+      addPoints(10); // reward
+    }
+
+    // Lookup Product
+    async function lookupProduct() {
+      const token = document.getElementById("scanToken").value;
+      if (!token) return alert("Paste QR token first");
+
+      // DEMO output
+      const productInfo = {
+        lot: "LOT123",
+        name: "Frozen Salmon",
+        origin: "Norway",
+        certifications: "Organic;Sustainable",
+        stage: "Retail"
+      };
+      document.getElementById("result").innerText = JSON.stringify(productInfo, null, 2);
+
+      addPoints(5); // reward
+    }
+
+    function addPoints(points) {
+      userScore += points;
+      document.getElementById("userScore").innerText = userScore;
+    }
+  </script>
+</body>
+</html>
