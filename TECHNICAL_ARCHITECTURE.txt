@@ -1,0 +1,153 @@
+Technical Architecture
+
+The solution follows a three-layer architecture:
+
+Frontend Layer:
+- Built with plain HTML, CSS and JavaScript.
+- Responsibilities: user interface, QR generation, optional camera preview, product lookup, IoT simulation, auth modal, leaderboard display, and local persistence.
+- Key files: `index.html`, `styles.css`, `app.js`.
+
+Blockchain Layer (Smart Contract):
+- Solidity contract implements product & IoT data storage and consumer lookups.
+- Key contract: `FoodTraceability.sol` (product registration, IoT logging, QR token generation, badge awarding, analytics).
+- Deployed on Ethereum-compatible networks (Remix for quick deploys; Hardhat recommended for repeatable dev & tests).
+
+Middleware / Web3 Integration:
+- `app.js` is the bridge between UI and blockchain.
+- Uses Web3.js (v1.x via CDN) to interact with Ethereum and MetaMask.
+- Includes a dual-ABI detection strategy to support either a “simple” contract ABI or an extended ABI and gracefully fall back to demo mode when no on-chain contract is configured.
+
+System Requirements:
+- Browser with MetaMask (or compatible injected Ethereum provider) for on-chain flows.
+- Remix IDE (browser) or Hardhat (local) for contract compile & deploy.
+- Local/static server to serve `index.html` (Python `python -m http.server`, VSCode Live Server, or `http-server`/npx).
+- Optional: Node.js + npm if you add Hardhat or other NPM-based tooling.
+
+MVP Features:
+- Product registration and lookup by lot number (on-chain or demo).
+- IoT data logging and retrieval (on-chain functions or local simulation).
+- Consumer rewards and badges (gamification).
+- QR code generation (QRCode.js) and camera preview (jsQR optional for decoding).
+- Local (browser) persistence for users and leaderboard with optional cloud endpoint.
+
+Technology Stack:
+- Frontend: HTML5, CSS3, Vanilla JavaScript
+- QR generation: QRCode.js (CDN)
+- Blockchain: Solidity (>=0.8.x)
+- Web3 client: web3.js (CDN)
+- Storage (demo): browser localStorage (`rpf_users`, `rpf_user`, `rpf_leaderboard`)
+- Optional cloud: MockAPI / JSONBin / Firebase REST endpoints via `API_BASE_URL`
+- Optional dev/test: Hardhat + ethers.js (recommended)
+
+Testing Approaches:
+- Smart contract:
+  - Quick manual validation in Remix (compile & interact).
+  - Suggested: Hardhat unit tests (mocha/chai + ethers) for `registerProduct`, `updateStage` role checks, `captureIoTData`, QR generation, and `getIoTLogs`.
+- Frontend:
+  - Manual browser functional testing (buttons, modals, MetaMask flows).
+  - Optional: Playwright/Puppeteer end-to-end tests for full flows.
+- QR / IoT:
+  - Manual camera tests and simulated IoT log generation to validate UI rendering and leaderboard changes.
+- Edge cases:
+  - Invalid lot numbers, missing IoT logs, network mismatch, MetaMask rejection, offline/demo fallback.
+
+Design and Implementation
+
+Smart Contract Design:
+- Data model:
+  - `Product` struct with `lotNumber`, `name`, `origin`, `certifications`, `Stage` enum, `currentHandler`, `IoTData[] transportLogs`, thresholds, and `exists` flag.
+  - IoT data as struct `IoTData { temperature, handlingNotes, timestamp }`.
+- Mappings and helpers:
+  - `mapping(string => Product) products;`
+  - QR token mappings: `qrToLot`, `lotToQr`.
+  - Badges and `badgeListByLot`.
+- Key functions:
+  - `registerProduct()` — register lot metadata.
+  - `captureIoTData()` / `logIoT()` — append IoT logs (restricted by role).
+  - `consumerLookupByLot()` — consumer-facing lookup by lot.
+  - `generateQRToken()` / `consumerLookupByQR()` — on-chain QR tokens + lookup.
+  - `getIoTLogs()` — returns parallel arrays of temps/notes/timestamps (gas-friendly view).
+  - `getAnalytics()` / `checkTemperatureCompliance()` — optional analytics helpers.
+- Security & notes:
+  - Owner model for role assignment; demo allows open registration (change for production).
+  - Avoid storing huge IoT arrays on-chain at scale — consider off-chain storage + on-chain references.
+  - QR token generation uses keccak on predictable inputs (sufficient for demo, not cryptographic randomness).
+
+DApp Stack Development:
+- `app.js` responsibilities:
+  - UI bindings and event handlers (lookup, generate QR, camera preview, simulate IoT, consumer scan).
+  - Dual ABI support (ABI_SIMPLE, ABI_EXTENDED) and runtime detection by calling safe read-only methods.
+  - Web3 initialization when `window.ethereum` exists; `connectWallet()` uses `eth_requestAccounts`.
+  - Persistence: if `API_BASE_URL` is set, use remote POST/GET calls; otherwise use localStorage.
+  - Auth modal: signup/login flows (demo: plaintext in localStorage; cloud optional).
+  - Leaderboard: aggregated per-user scores with upsert behavior to avoid duplicate rows, per-user badges persisted in `rpf_users`.
+  - Camera preview: starts `getUserMedia()`; jsQR decoding is documented as optional and can be added.
+
+Design Choices and Algorithms:
+- Dual-ABI detection: pragmatic approach to support multiple contract versions and robust demo fallback.
+- Data aggregation: leaderboard entries upserted by username so repeated scans increase a single row instead of creating duplicates.
+- Badge handling: award function returns bonus points and persists badge names to the user record; the caller applies the points once (avoids double counting).
+- Fallbacks: demonstrable user experience regardless of on-chain availability (demo dataset `DEMO_PRODUCTS`).
+- UX decisions: modal-based auth, subtle animations, and visual cues for network/account state.
+
+User Interface Design
+- Layout:
+  - Top Nav: Brand + Connect Wallet button.
+  - Hero: banner image + headline.
+  - Main: two-column layout — left (search, QR, product card, IoT logs, actions), right (leaderboard, badges, about).
+  - Modal: compact login/signup form with clear validation.
+- Key IDs used by JS (do not change without updating `app.js`):
+  - `lotInput`, `lookupBtn`, `generateQRBtn`, `scanQRBtn`, `qrcode`, `qrVideo`, `productName`, `productOrigin`, `productCerts`, `productStage`, `timeline`, `iotLogs`, `logIoTBtn`, `scanBtn`, `leaderboardList`, `sessionPoints`, `badgesList`, `authModal`, `authForm`, `authUsername`, `authPassword`.
+- Accessibility:
+  - Responsive layout and readable color contrast.
+  - Keyboard-accessible inputs and buttons (forms use native controls).
+- Motion & polish:
+  - Subtle hero float, button hover lifts, modal entrance animation, leaderboard row hover.
+
+Frameworks and Tools
+- Minimal set to reduce overhead:
+  - Frontend: Vanilla JS + CDN libraries:
+    - `https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js` — Web3
+    - `https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js` — QR generation
+    - Optional: `jsQR` via CDN for live QR decoding
+- Optional tooling for dev:
+  - Hardhat + ethers.js for local development and automated tests.
+  - Node.js/npm for tooling; WSL2 or Docker recommended on Windows to avoid node-gyp issues.
+
+Design Emphasis
+- Accessibility and simplicity for non-technical users.
+- Smooth transition between demo and on-chain modes for reliable demos.
+- Gamification to encourage end-user engagement (badges & session points).
+- Clear separation of concerns: UI vs. Web3 logic vs. contract.
+
+File map (high-level)
+- `index.html` — single-page frontend UI.
+- `styles.css` — all styles and animations.
+- `app.js` — main DApp logic, Web3 integration, demo fallback, auth & persistence.
+- `FoodTraceability.sol` — Solidity contract source.
+- `artifacts/` — compiled contract JSON artifacts (if included).
+- `README.md` — setup & run instructions.
+
+Operational notes (how to run)
+- Serve: `python -m http.server 8080` (or `npx http-server -p 8080`) from repo root.
+- Deploy (optional):
+  - Remix: paste `FoodTraceability.sol`, compile and deploy with Injected Web3.
+  - Hardhat: scaffold project, copy contract into `contracts/`, create `scripts/deploy.js`, run tests & deploy to local node.
+- Configure:
+  - Edit `app.js` top constants:
+    - `const CONTRACT_ADDRESS = "0x..."` to enable on-chain mode.
+    - `const API_BASE_URL = ""` to enable remote persistence.
+- Run UI: open `http://localhost:8080` in browser with MetaMask available.
+
+Security considerations & next steps
+- Current demo stores passwords in plaintext in localStorage — acceptable for demo only. Replace with secure backend (hashed passwords, OAuth / tokens) for production.
+- For heavy IoT logging, use off-chain storage (IPFS, cloud DB) with on-chain hashes/pointers to avoid gas/execution problems.
+- Improve contract randomness and review access control before production.
+- Add unit & integration tests with Hardhat (both contract tests and small frontend e2e tests).
+
+If you want, I can:
+- Produce a one-page architecture diagram (SVG/PNG) summarizing these layers and flows.
+- Create a small Hardhat scaffold + one unit test for `registerProduct` and `getIoTLogs`.
+- Implement jsQR live decoding in `app.js` and wire it into the camera preview for automatic lookup.
+
+Which next deliverable would you prefer?

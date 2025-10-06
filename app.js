@@ -100,31 +100,44 @@ async function init() {
     try{
       accounts = await web3.eth.getAccounts();
       if(accounts.length) onConnected(accounts[0]);
+      // Initialize/detect contract if CONTRACT_ADDRESS is provided
+      await detectContract();
 
-      // Initialize contract only if CONTRACT_ADDRESS is set
-      if (CONTRACT_ADDRESS && CONTRACT_ADDRESS.length > 0) {
-        // Try the simple ABI first (non-destructive check). If calls fail, try extended ABI.
-        const cSimple = new web3.eth.Contract(ABI_SIMPLE, CONTRACT_ADDRESS);
-        const cExt = new web3.eth.Contract(ABI_EXTENDED, CONTRACT_ADDRESS);
-        // detection: try a read-only call that should be safe; use a demo lot (might revert if not present)
-        try {
-          await cSimple.methods.productExists('LOT-1001').call();
-          contract = cSimple; contractMode = 'simple';
-          console.log('Using simple contract ABI');
-        } catch (errSimple) {
-          try {
-            // try extended
-            await cExt.methods.consumerLookupByLot('LOT-1001').call();
-            contract = cExt; contractMode = 'extended';
-            console.log('Using extended contract ABI');
-          } catch (errExt) {
-            console.warn('Contract at address did not respond to detection calls — falling back to demo mode');
-            contract = null; contractMode = null;
-          }
-        }
-      }
+      // Listen for account or network changes and update contract detection
+      try {
+        window.ethereum.on('accountsChanged', (accs) => {
+          accounts = accs || [];
+          if(accounts.length) onConnected(accounts[0]); else onConnected('');
+        });
+        window.ethereum.on('chainChanged', (chainId) => {
+          // simple approach: reload to re-init web3 and contract detection
+          console.log('Chain changed', chainId, 'reloading page');
+          setTimeout(()=>window.location.reload(), 200);
+        });
+      } catch (e) { console.warn('Failed to attach ethereum event listeners', e); }
     }catch(e){console.log('web3 init',e)}
   }
+}
+
+// Detect contract type at runtime (simple vs extended). Safe, non-destructive calls only.
+async function detectContract(){
+  contract = null; contractMode = null;
+  if(!CONTRACT_ADDRESS || CONTRACT_ADDRESS.length === 0) return;
+  if(!web3) return;
+  try{
+    const cSimple = new web3.eth.Contract(ABI_SIMPLE, CONTRACT_ADDRESS);
+    const cExt = new web3.eth.Contract(ABI_EXTENDED, CONTRACT_ADDRESS);
+    // Prefer simple if productExists call succeeds (it returns bool)
+    try{
+      await cSimple.methods.productExists('LOT-1001').call();
+      contract = cSimple; contractMode = 'simple'; console.log('Using simple contract ABI'); return;
+    }catch(e){}
+    try{
+      await cExt.methods.consumerLookupByLot('LOT-1001').call();
+      contract = cExt; contractMode = 'extended'; console.log('Using extended contract ABI'); return;
+    }catch(e){}
+    console.warn('Contract at address did not respond to detection calls — using demo mode');
+  }catch(e){ console.warn('Contract detection failed', e); }
 }
 
 function onConnected(addr){
@@ -138,38 +151,6 @@ async function connectWallet(){
     onConnected(accounts[0]);
   }catch(e){console.error(e)}
 }
-
-async function lookupProduct(){
-  const lot = document.getElementById('lotInput').value.trim();
-  if(!lot) return alert('Enter lot number');
-
-  clearProductUI();
-
-  if(CONTRACT_ADDRESS && contract && web3){
-    try{
-      const exists = await contract.methods.productExists(lot).call();
-      if(!exists){
-        alert('Product not found on-chain, showing demo data if available');
-        showDemoProduct(lot);return;
-      }
-      const res = await contract.methods.getProductSummary(lot).call();
-      const [lotHex,name,origin,certs,stage,registeredAt,registrant,iotCount] = res;
-      showProduct({name,origin,certs,stage:stageToString(stage),iotCount:parseInt(iotCount)});
-      // load IoT logs from contract (up to 10)
-      const logs = [];
-      for(let i=0;i<Math.min(10, parseInt(iotCount)); i++){
-        const r = await contract.methods.getIoTRecord(lot,i).call();
-        logs.push({ts:parseInt(r[0])*1000,temp:parseInt(r[1]),note:r[2]});
-      }
-      renderIoTLogs(logs);
-    }catch(e){
-      console.error(e);showDemoProduct(lot);
-    }
-  }else{
-    showDemoProduct(lot);
-  }
-}
-
 // Updated lookup supporting extended contract if detected
 async function lookupProduct(){
   const lot = document.getElementById('lotInput').value.trim();
@@ -308,17 +289,31 @@ function addDemoIoT(lot,temp,note){
 function consumerScan(){
   const lot = document.getElementById('lotInput').value.trim(); if(!lot) return alert('Enter lot number');
   // award local session points. Simple contract supports on-chain consumerScan, but extended contract does not include consumerScan
-  if(CONTRACT_ADDRESS && contract && accounts && accounts[0] && contractMode === 'simple'){
+  // compute base and badge bonus (awardBadgesIfAny now returns a bonus integer)
+  const basePoints = 10;
+  const bonus = awardBadgesIfAny(lot) || 0;
+  const increment = basePoints + bonus;
+
+  // Apply points once
+  sessionPoints += increment;
+  updateSessionPoints();
+
+  // Try to record on-chain if supported (do not double-award local points)
+  if (CONTRACT_ADDRESS && contract && accounts && accounts[0] && contractMode === 'simple'){
     contract.methods.consumerScan(lot).send({from:accounts[0]})
-      .on('transactionHash', h=>{ sessionPoints += 10; updateSessionPoints(); alert('Scan recorded on-chain'); })
-      .on('error', e=>{ alert('Tx failed, awarding local points'); sessionPoints+=10; updateSessionPoints(); });
-  } else {
-    sessionPoints+=10; updateSessionPoints(); awardBadgesIfAny(lot);
+      .on('transactionHash', h=>{ console.log('Scan tx sent', h); })
+      .on('error', e=>{ console.warn('On-chain scan failed', e); });
   }
-  // update leaderboard demo (local) and persist for user if available
+
+  // update leaderboard demo (local) and persist for user; store incremental points (not cumulative sessionPoints)
   const name = currentUser ? currentUser.username : 'You';
-  const entry = {name, points: sessionPoints, badges:[] };
-  LEADERBOARD.push(entry);
+  const entry = {name, points: increment, badges: bonus ? ['Farm Fresh'] : [] };
+
+  // upsert into in-memory LEADERBOARD
+  const existing = LEADERBOARD.find(e=>e.name === name);
+  if(existing){ existing.points = (existing.points||0) + entry.points; existing.badges = Array.from(new Set([...(existing.badges||[]), ...(entry.badges||[])])); }
+  else { LEADERBOARD.push({name: entry.name, points: entry.points, badges: entry.badges}); }
+
   persistLeaderboardEntry(entry);
   renderLeaderboardWith(LEADERBOARD);
 }
@@ -333,7 +328,10 @@ function renderLeaderboardWith(list){
   const ul = document.getElementById('leaderboardList'); ul.innerHTML='';
   const sorted = (list || []).slice().sort((a,b)=> (b.points||0) - (a.points||0));
   sorted.slice(0,20).forEach(p=>{
-    const li = document.createElement('li'); li.innerHTML = `<div>${p.name}</div><div>${p.points}</div>`; ul.appendChild(li);
+    const li = document.createElement('li');
+    const badgesHtml = (p.badges || []).map(b=>`<span class="lb-badge">${b}</span>`).join(' ');
+    li.innerHTML = `<div class="lb-row"><div class="lb-name">${p.name} ${badgesHtml}</div><div class="lb-points">${p.points}</div></div>`;
+    ul.appendChild(li);
   });
 }
 
@@ -356,7 +354,13 @@ async function signup(username,password){
   // local fallback
   const store = JSON.parse(localStorage.getItem('rpf_users')||'{}');
   if(store[username]) return alert('User exists');
-  store[username] = {password}; localStorage.setItem('rpf_users', JSON.stringify(store)); currentUser={username,id:username}; currentUser.id = username; localStorage.setItem('rpf_user', JSON.stringify(currentUser)); onLoginSuccess(currentUser);
+  store[username] = {password}; localStorage.setItem('rpf_users', JSON.stringify(store));
+  // initialize badges list for the user
+  store[username].badges = [];
+  localStorage.setItem('rpf_users', JSON.stringify(store));
+  currentUser = { username: username, id: username };
+  localStorage.setItem('rpf_user', JSON.stringify(currentUser));
+  onLoginSuccess(currentUser);
 }
 
 async function login(username,password){
@@ -398,14 +402,29 @@ async function loadUserLeaderboard(){
     }catch(e){ console.warn('Failed to fetch leaderboard from API', e); }
   }
   const saved = JSON.parse(localStorage.getItem('rpf_leaderboard')||'null');
-  if(saved){ renderLeaderboardWith(saved); } else { renderLeaderboardWith(LEADERBOARD); }
+  if(saved){
+    // merge saved aggregated entries with in-memory LEADERBOARD (avoid duplicates by name)
+    const map = {};
+    (LEADERBOARD||[]).forEach(e=>{ map[e.name] = {name:e.name, points:e.points||0, badges: e.badges||[]}; });
+    (saved||[]).forEach(e=>{ if(map[e.name]){ map[e.name].points += (e.points||0); map[e.name].badges = Array.from(new Set([...(map[e.name].badges||[]), ...(e.badges||[])])); } else { map[e.name] = {name:e.name, points:e.points||0, badges:e.badges||[]}; } });
+    const merged = Object.values(map);
+    renderLeaderboardWith(merged);
+  } else { renderLeaderboardWith(LEADERBOARD); }
 }
 
 async function persistLeaderboardEntry(entry){
   if(API_BASE_URL){
     try{ await fetch(`${API_BASE_URL}/leaderboard`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(entry)}); return; }catch(e){ console.warn('Failed to persist to API', e); }
   }
-  const arr = JSON.parse(localStorage.getItem('rpf_leaderboard')||'[]'); arr.push(entry); localStorage.setItem('rpf_leaderboard', JSON.stringify(arr));
+  // local fallback: upsert by name (store incremental points as entries, then loadUserLeaderboard merges them)
+  const arr = JSON.parse(localStorage.getItem('rpf_leaderboard')||'[]');
+  const idx = arr.findIndex(a=>a.name === entry.name);
+  // try merge with stored user badges if available
+  let userBadges = [];
+  try{ const users = JSON.parse(localStorage.getItem('rpf_users')||'{}'); if(users[entry.name] && users[entry.name].badges) userBadges = users[entry.name].badges; }catch(e){}
+  if(idx >= 0){ arr[idx].points = (arr[idx].points||0) + (entry.points||0); arr[idx].badges = Array.from(new Set([...(arr[idx].badges||[]), ...(entry.badges||[]), ...userBadges])); }
+  else { arr.push({name: entry.name, points: entry.points||0, badges: Array.from(new Set([...(entry.badges||[]), ...userBadges]))}); }
+  localStorage.setItem('rpf_leaderboard', JSON.stringify(arr));
 }
 
 function renderBadges(){
@@ -416,9 +435,21 @@ function renderBadges(){
 
 function awardBadgesIfAny(lot){
   // Simple demo: award 'Farm Fresh' if lot contains '1001'
+  // This function now returns bonus points so the caller can update sessionPoints once.
   if(lot.includes('1001')){
-    sessionPoints += 5; updateSessionPoints(); alert('Badge awarded: Farm Fresh (+5 pts)');
+    const badge = 'Farm Fresh';
+    // persist badge to current user's stored record if logged in
+    if(currentUser){
+      try{
+        const users = JSON.parse(localStorage.getItem('rpf_users')||'{}');
+        if(!users[currentUser.username]) users[currentUser.username] = {password:'', badges:[]};
+        users[currentUser.username].badges = Array.from(new Set([...(users[currentUser.username].badges||[]), badge]));
+        localStorage.setItem('rpf_users', JSON.stringify(users));
+      }catch(e){console.warn('Failed to persist badge', e)}
+    }
+    return 5;
   }
+  return 0;
 }
 
 window.addEventListener('load', init);
