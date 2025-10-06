@@ -602,7 +602,7 @@
 					"notice": "Update stage — must move forward (Created -> Vendor -> Manufacturing -> Logistics -> Retail -> Completed) Only the address with the appropriate role should call updateStage for that stage (enforced)."
 				}
 			},
-			"notice": "End-to-end frozen food traceability with QR simulation and gamification badges. How to use in Remix: 1. Create `FoodTraceabilityFull.sol` and paste this code. 2. Compile with Solidity 0.8.20. 3. Deploy (account deploying becomes owner). 4. Use owner-only functions to assign roles, register products, and optionally set thresholds. 5. Use role accounts to update stages/capture IoT logs. 6. Use generateQR to create a QR token; consumer can call consumerLookupByQR(token).",
+			"notice": "End-to-end frozen food traceability with QR simulation and gamification badges. How to use in Remix: 1. Create `FoodTraceability.sol` and paste this code. 2. Compile with Solidity 0.8.20. 3. Deploy (account deploying becomes owner). 4. Use owner-only functions to assign roles, register products, and optionally set thresholds. 5. Use role accounts to update stages/capture IoT logs. 6. Use generateQR to create a QR token; consumer can call consumerLookupByQR(token).",
 			"version": 1
 		}
 	},
@@ -623,11 +623,11 @@
 	},
 	"sources": {
 		"FoodTraceability.sol": {
-			"keccak256": "0x5b15ee1d3bbe68f9b5392c9ae9264bdad9c2e2812fcb1dcce3ea5f7c41aea2f7",
+			"keccak256": "0x6453f40faa1910146511250d97e55dbcc2490873e50d97a18c360bbc5ed0b278",
 			"license": "MIT",
 			"urls": [
-				"bzz-raw://d8e38ee1d4566ac9dbc2ae23b237661335c041c08431e8669143423e7a2396f5",
-				"dweb:/ipfs/QmYBp2ugqJdT1MB4qCDYCJVLZ5qbYzVGN5v6gXBXK8hSoC"
+				"bzz-raw://7bd2b5ad81c14a051257411101be423c6d87bd26002e6287f3ecd2a5009547f9",
+				"dweb:/ipfs/Qmf16GB7zjWHgNgvjwt1TJnTT5vd7bMXErqV7uYtoVWv74"
 			]
 		}
 	},

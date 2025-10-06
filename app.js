@@ -4,7 +4,7 @@
 // - Provides QR generation and simple camera scanning (fallback)
 // - Simulates IoT logs and awards consumer points
 
-const CONTRACT_ADDRESS = ""; // paste deployed contract address here if available
+const CONTRACT_ADDRESS = "FoodTraceability.sol"; // paste deployed contract address here if available
 // Optional cloud JSON API base URL (MockAPI, JSONBin, Firebase REST endpoints). If empty, localStorage is used.
 const API_BASE_URL = ""; // e.g. https://YOUR_API_BASE_URL
 
