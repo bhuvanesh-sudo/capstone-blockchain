@@ -4,6 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Rich Products — Frozen Food Traceability</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Poppins:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -12,6 +15,7 @@
   <header class="topbar">
     <div class="brand">Rich Products</div>
     <div class="tag">From farm to fork — complete visibility</div>
+    <div id="connectionStatus" class="connection-status" aria-live="polite">Wallet: not detected • Contract: demo mode</div>
     <button id="connectBtn" class="btn">Connect Wallet</button>
   </header>
 
@@ -47,6 +51,7 @@
       </div>
 
       <div class="card product-card" id="productCard">
+        <img id="productImage" src="" alt="Product image" class="product-image hidden" loading="lazy" />
         <h3 id="productName">Product Name</h3>
         <div class="meta">
           <div><strong>Origin:</strong> <span id="productOrigin">-</span></div>
@@ -98,7 +103,7 @@
           <input id="authUsername" name="username" type="text" autocomplete="username" required />
           <label for="authPassword">Password</label>
           <input id="authPassword" name="password" type="password" autocomplete="current-password" required />
-          <div class="row" style="margin-top:12px;">
+          <div class="row modal-actions">
             <button id="authSubmit" class="btn primary">Submit</button>
             <button id="authCancel" type="button" class="btn">Cancel</button>
           </div>

@@ -4,7 +4,7 @@
 // - Provides QR generation and simple camera scanning (fallback)
 // - Simulates IoT logs and awards consumer points
 
-const CONTRACT_ADDRESS = "FoodTraceability.sol"; // paste deployed contract address here if available
+const CONTRACT_ADDRESS = ""; // paste deployed contract address here if available
 // Optional cloud JSON API base URL (MockAPI, JSONBin, Firebase REST endpoints). If empty, localStorage is used.
 const API_BASE_URL = ""; // e.g. https://YOUR_API_BASE_URL
 
@@ -27,7 +27,39 @@ const ABI_EXTENDED = [
   {"inputs":[{"internalType":"string","name":"lotNumber","type":"string"}],"name":"generateQRToken","outputs":[{"internalType":"string","name":"token","type":"string"}],"stateMutability":"nonpayable","type":"function"}
 ];
 
-let web3; let contract = null; let accounts = []; let contractMode = null; // 'simple'|'extended'|null
+let web3;
+let contract = null;
+let accounts = [];
+let contractMode = null; // 'simple'|'extended'|null
+
+const $ = (id) => document.getElementById(id);
+const shortenAddress = (addr = '') => (addr ? `${addr.slice(0,6)}...${addr.slice(-4)}` : '');
+const CONNECTION_STATUS = {
+  wallet: 'Wallet: not detected',
+  contract: 'Contract: demo mode',
+  tone: 'warning'
+};
+const renderConnectionStatus = () => {
+  const el = $('connectionStatus');
+  if (!el) return;
+  el.textContent = `${CONNECTION_STATUS.wallet} • ${CONNECTION_STATUS.contract}`;
+  el.dataset.tone = CONNECTION_STATUS.tone;
+};
+const setWalletStatus = (message, tone) => {
+  CONNECTION_STATUS.wallet = message;
+  if (tone) CONNECTION_STATUS.tone = tone;
+  renderConnectionStatus();
+};
+const setContractStatus = (message, tone) => {
+  CONNECTION_STATUS.contract = message;
+  if (tone) CONNECTION_STATUS.tone = tone;
+  renderConnectionStatus();
+};
+const TIMELINE_STAGES = ['Vendor', 'Manufacturer', 'Logistics', 'Retail'];
+const DEMO_IOT_NOTES = ['Packed', 'In Cold Storage', 'Transit', 'Delivered'];
+const BADGE_LIBRARY = ['Sustainable Product', 'Farm Fresh', 'Cold Chain Champion'];
+const CAMERA_TIMEOUT_MS = 10000;
+const DEFAULT_PRODUCT_IMAGE = 'https://upload.wikimedia.org/wikipedia/commons/4/46/Frozen_peas_with_snow.jpg';
 
 // Demo data store for when contract is not connected
 const DEMO_PRODUCTS = {
@@ -36,15 +68,51 @@ const DEMO_PRODUCTS = {
     origin:"Green Valley Farms, CA",
     certifications:"Organic, FairTrade",
     stage:"Retail",
-    iot:[{ts:Date.now()-3600*1000, temp:-18, note:"Packed"},{ts:Date.now()-1800*1000,temp:-19,note:"In Cold Storage"}]
+    iot:[{ts:Date.now()-3600*1000, temp:-18, note:"Packed"},{ts:Date.now()-1800*1000,temp:-19,note:"In Cold Storage"}],
+    imageUrl: "https://topcart.s3.ap-south-1.amazonaws.com/wp-content/uploads/2021/11/11182908/thumbnail-1.png"
   },
   "LOT-2002":{
     name:"Mixed Berries",
     origin:"Berry Farms, WA",
     certifications:"Sustainably Grown",
     stage:"Logistics",
-    iot:[{ts:Date.now()-7200*1000,temp:-16,note:"Loaded"},{ts:Date.now()-4000*1000,temp:-17,note:"Transit"}]
+    iot:[{ts:Date.now()-7200*1000,temp:-16,note:"Loaded"},{ts:Date.now()-4000*1000,temp:-17,note:"Transit"}],
+    imageUrl: "https://images.unsplash.com/photo-1598512752271-33f913a53283?q=80&w=1974&auto=format&fit=crop"
   }
+};
+
+// Keyword-based image matcher (order matters: first match wins)
+const PRODUCT_IMAGE_MATCHERS = [
+  {
+    keywords: ['frozen', 'peas'],
+    url: 'https://upload.wikimedia.org/wikipedia/commons/4/46/Frozen_peas_with_snow.jpg'
+  },
+  {
+    keywords: ['peas'],
+    url: 'https://upload.wikimedia.org/wikipedia/commons/4/46/Frozen_peas_with_snow.jpg'
+  },
+  {
+    keywords: ['mixed', 'berries'],
+    url: 'https://images.unsplash.com/photo-1598512752271-33f913a53283?q=80&w=1974&auto=format&fit=crop'
+  },
+  {
+    keywords: ['berries'],
+    url: 'https://images.unsplash.com/photo-1598512752271-33f913a53283?q=80&w=1974&auto=format&fit=crop'
+  },
+  {
+    keywords: ['spinach'],
+    url: 'https://images.unsplash.com/photo-1576045057995-568f588f2d80?q=80&w=1974&auto=format&fit=crop'
+  }
+];
+
+const getProductImage = (name = '') => {
+  if (!name) return DEFAULT_PRODUCT_IMAGE;
+  const normalized = name.trim().toLowerCase();
+  for (const matcher of PRODUCT_IMAGE_MATCHERS) {
+    const hitsAll = matcher.keywords.every((keyword) => normalized.includes(keyword));
+    if (hitsAll) return matcher.url;
+  }
+  return DEFAULT_PRODUCT_IMAGE;
 };
 
 const LEADERBOARD = [
@@ -57,28 +125,28 @@ let sessionPoints = 0;
 
 async function init() {
   // wire UI
-  document.getElementById('lookupBtn').onclick = lookupProduct;
-  document.getElementById('generateQRBtn').onclick = generateQR;
-  document.getElementById('scanQRBtn').onclick = startCameraScan;
-  document.getElementById('logIoTBtn').onclick = simulateIoT;
-  document.getElementById('scanBtn').onclick = consumerScan;
-  document.getElementById('connectBtn').onclick = connectWallet;
+  const lookupBtn = $('lookupBtn'); if (lookupBtn) lookupBtn.onclick = lookupProduct;
+  const generateQRBtn = $('generateQRBtn'); if (generateQRBtn) generateQRBtn.onclick = generateQR;
+  const scanQRBtn = $('scanQRBtn'); if (scanQRBtn) scanQRBtn.onclick = startCameraScan;
+  const logIoTBtn = $('logIoTBtn'); if (logIoTBtn) logIoTBtn.onclick = simulateIoT;
+  const scanBtn = $('scanBtn'); if (scanBtn) scanBtn.onclick = consumerScan;
+  const connectBtn = $('connectBtn'); if (connectBtn) connectBtn.onclick = connectWallet;
   // auth UI
-  const loginBtn = document.getElementById('loginBtn'); if(loginBtn) loginBtn.onclick = ()=>openAuthModal('login');
-  const signupBtn = document.getElementById('signupBtn'); if(signupBtn) signupBtn.onclick = ()=>openAuthModal('signup');
-  const logoutBtn = document.getElementById('logoutBtn'); if(logoutBtn) logoutBtn.onclick = logout;
+  const loginBtn = $('loginBtn'); if(loginBtn) loginBtn.onclick = ()=>openAuthModal('login');
+  const signupBtn = $('signupBtn'); if(signupBtn) signupBtn.onclick = ()=>openAuthModal('signup');
+  const logoutBtn = $('logoutBtn'); if(logoutBtn) logoutBtn.onclick = logout;
 
   // auth modal handlers
-  const authModal = document.getElementById('authModal');
-  const authForm = document.getElementById('authForm');
-  const authTitle = document.getElementById('authTitle');
-  const authSubmit = document.getElementById('authSubmit');
-  const authCancel = document.getElementById('authCancel');
+  const authModal = $('authModal');
+  const authForm = $('authForm');
+  const authCancel = $('authCancel');
   if(authCancel) authCancel.onclick = closeAuthModal;
   if(authForm) authForm.addEventListener('submit', async (ev)=>{
     ev.preventDefault();
-    const username = document.getElementById('authUsername').value.trim();
-    const password = document.getElementById('authPassword').value;
+    const usernameField = $('authUsername');
+    const passwordField = $('authPassword');
+    const username = usernameField ? usernameField.value.trim() : '';
+    const password = passwordField ? passwordField.value : '';
     if(!username || !password) return alert('Username and password required');
     if(authModal.dataset.mode === 'signup'){
       await signup(username,password);
@@ -93,9 +161,17 @@ async function init() {
 
   renderLeaderboard();
   renderBadges();
+  renderConnectionStatus();
+
+  if (CONTRACT_ADDRESS) {
+    setContractStatus('Contract: detecting capabilities…', 'info');
+  } else {
+    setContractStatus('Contract: demo mode (no address configured)', 'warning');
+  }
 
   // try connect to web3
   if (window.ethereum) {
+    setWalletStatus('Wallet: detected (click Connect Wallet)', 'info');
     web3 = new Web3(window.ethereum);
     try{
       accounts = await web3.eth.getAccounts();
@@ -105,9 +181,10 @@ async function init() {
 
       // Listen for account or network changes and update contract detection
       try {
-        window.ethereum.on('accountsChanged', (accs) => {
+        window.ethereum.on('accountsChanged', async (accs) => {
           accounts = accs || [];
           if(accounts.length) onConnected(accounts[0]); else onConnected('');
+          await detectContract();
         });
         window.ethereum.on('chainChanged', (chainId) => {
           // simple approach: reload to re-init web3 and contract detection
@@ -116,83 +193,135 @@ async function init() {
         });
       } catch (e) { console.warn('Failed to attach ethereum event listeners', e); }
     }catch(e){console.log('web3 init',e)}
+  } else {
+    setWalletStatus('Wallet: not detected — demo mode', 'warning');
   }
 }
 
 // Detect contract type at runtime (simple vs extended). Safe, non-destructive calls only.
 async function detectContract(){
   contract = null; contractMode = null;
-  if(!CONTRACT_ADDRESS || CONTRACT_ADDRESS.length === 0) return;
-  if(!web3) return;
+  if(!CONTRACT_ADDRESS || CONTRACT_ADDRESS.length === 0){
+    setContractStatus('Contract: demo mode (no address configured)', 'warning');
+    return;
+  }
+  if(!web3){
+    setContractStatus('Contract: wallet not connected yet', 'warning');
+    return;
+  }
   try{
     const cSimple = new web3.eth.Contract(ABI_SIMPLE, CONTRACT_ADDRESS);
     const cExt = new web3.eth.Contract(ABI_EXTENDED, CONTRACT_ADDRESS);
     // Prefer simple if productExists call succeeds (it returns bool)
     try{
       await cSimple.methods.productExists('LOT-1001').call();
-      contract = cSimple; contractMode = 'simple'; console.log('Using simple contract ABI'); return;
+      contract = cSimple; contractMode = 'simple'; console.log('Using simple contract ABI');
+      setContractStatus('Contract: simple ABI ready', 'success');
+      return;
     }catch(e){}
     try{
       await cExt.methods.consumerLookupByLot('LOT-1001').call();
-      contract = cExt; contractMode = 'extended'; console.log('Using extended contract ABI'); return;
+      contract = cExt; contractMode = 'extended'; console.log('Using extended contract ABI');
+      setContractStatus('Contract: extended ABI ready', 'success');
+      return;
     }catch(e){}
     console.warn('Contract at address did not respond to detection calls — using demo mode');
-  }catch(e){ console.warn('Contract detection failed', e); }
+    setContractStatus('Contract: not responding — using demo data', 'warning');
+  }catch(e){
+    console.warn('Contract detection failed', e);
+    setContractStatus('Contract: detection failed — demo data', 'error');
+  }
 }
 
-function onConnected(addr){
-  document.getElementById('connectBtn').innerText = addr.slice(0,6)+"..."+addr.slice(-4);
+function onConnected(addr = ''){
+  const btn = $('connectBtn');
+  if (!btn) return;
+  if (!addr) {
+    btn.textContent = 'Connect Wallet';
+    btn.classList.remove('connected');
+    setWalletStatus('Wallet: disconnected', 'warning');
+    return;
+  }
+  const short = shortenAddress(addr);
+  btn.textContent = short;
+  btn.classList.add('connected');
+  setWalletStatus(`Wallet: ${short}`, 'success');
 }
 
 async function connectWallet(){
-  if(!window.ethereum) return alert('Install MetaMask or a Web3 wallet');
+  if(!window.ethereum){
+    alert('Install MetaMask or a Web3 wallet');
+    setWalletStatus('Wallet: not detected — install MetaMask to connect', 'error');
+    return;
+  }
   try{
-    accounts = await window.ethereum.request({method:'eth_requestAccounts'});
-    onConnected(accounts[0]);
-  }catch(e){console.error(e)}
+    const requested = await window.ethereum.request({method:'eth_requestAccounts'});
+    accounts = requested || [];
+    if(accounts.length){
+      onConnected(accounts[0]);
+      await detectContract();
+    } else {
+      onConnected('');
+    }
+  }catch(e){
+    console.error(e);
+    setWalletStatus('Wallet: connection request rejected', 'error');
+  }
 }
 // Updated lookup supporting extended contract if detected
 async function lookupProduct(){
-  const lot = document.getElementById('lotInput').value.trim();
-  if(!lot) return alert('Enter lot number');
+  const input = $('lotInput');
+  if (!input) return;
+  const lot = input.value.trim();
+  if(!lot){ alert('Enter lot number'); return; }
 
   clearProductUI();
 
   if(CONTRACT_ADDRESS && contract && web3){
     try{
       if (contractMode === 'extended') {
-        // extended contract: consumerLookupByLot + getIoTLogs
         const res = await contract.methods.consumerLookupByLot(lot).call();
-        // res: [name, origin, certifications, stage, handler, latestQR]
         const [name, origin, certs, stageNum] = res;
-        showProduct({name, origin, certs, stage: stageToString(stageNum)});
-        // IoT logs
+        const imageUrl = getProductImage(name);
+        showProduct({name, origin, certs, stage: stageToString(stageNum), imageUrl});
+
         const logsRes = await contract.methods.getIoTLogs(lot).call();
         const temps = logsRes[0] || [];
         const notes = logsRes[1] || [];
         const timestamps = logsRes[2] || [];
-        const logs = [];
-        for (let i=0;i<temps.length;i++) logs.push({ts: parseInt(timestamps[i])*1000, temp: parseInt(temps[i]), note: notes[i]});
+        const logs = temps.map((t, idx) => ({
+          ts: parseInt(timestamps[idx] || '0', 10) * 1000,
+          temp: parseInt(t, 10),
+          note: notes[idx] || ''
+        }));
         renderIoTLogs(logs);
-      } else {
-        // simple contract behavior (existing code path)
-        const exists = await contract.methods.productExists(lot).call();
-        if(!exists){ alert('Product not found on-chain, showing demo data if available'); showDemoProduct(lot); return; }
-        const res = await contract.methods.getProductSummary(lot).call();
-        const [lotHex,name,origin,certs,stage,registeredAt,registrant,iotCount] = res;
-        showProduct({name,origin,certs,stage:stageToString(stage),iotCount:parseInt(iotCount)});
-        // load IoT logs from contract (up to 10)
-        const logs = [];
-        for(let i=0;i<Math.min(10, parseInt(iotCount)); i++){
-          const r = await contract.methods.getIoTRecord(lot,i).call();
-          logs.push({ts:parseInt(r[0])*1000,temp:parseInt(r[1]),note:r[2]});
-        }
-        renderIoTLogs(logs);
+        return;
       }
-    }catch(e){ console.error(e); showDemoProduct(lot); }
-  }else{
-    showDemoProduct(lot);
+
+      const exists = await contract.methods.productExists(lot).call();
+      if(!exists){
+        alert('Product not found on-chain, showing demo data if available');
+        showDemoProduct(lot);
+        return;
+      }
+
+      const res = await contract.methods.getProductSummary(lot).call();
+      const [lotHex,name,origin,certs,stage,registeredAt,registrant,iotCount] = res;
+      const imageUrl = getProductImage(name);
+      showProduct({name,origin,certs,stage:stageToString(stage),iotCount:parseInt(iotCount), imageUrl});
+
+      const logs = [];
+      const total = Math.min(10, parseInt(iotCount));
+      for(let i=0;i<total; i++){
+        const r = await contract.methods.getIoTRecord(lot,i).call();
+        logs.push({ts:parseInt(r[0])*1000,temp:parseInt(r[1]),note:r[2]});
+      }
+      renderIoTLogs(logs);
+      return;
+    }catch(e){ console.error(e); }
   }
+
+  showDemoProduct(lot);
 }
 
 function stageToString(n){
@@ -201,68 +330,119 @@ function stageToString(n){
 }
 
 function showDemoProduct(lot){
-  const p = DEMO_PRODUCTS[lot] || {name:'Unknown Product', origin:'Unknown', certifications:'-', stage:'Unknown', iot:[]};
-  showProduct({name:p.name, origin:p.origin, certs:p.certifications, stage:p.stage});
+  const fallback = {name:'Unknown Product', origin:'Unknown', certifications:'-', stage:'Unknown', iot:[], imageUrl:''};
+  const p = DEMO_PRODUCTS[lot] || fallback;
+  const imageUrl = p.imageUrl || getProductImage(p.name);
+  showProduct({name:p.name, origin:p.origin, certs:p.certifications, stage:p.stage, imageUrl});
   renderIoTLogs(p.iot.map(x=>({ts:x.ts,temp:x.temp,note:x.note})));
 }
 
-function showProduct({name,origin,certs,stage,iotCount}){
-  document.getElementById('productName').innerText = name;
-  document.getElementById('productOrigin').innerText = origin;
-  document.getElementById('productCerts').innerText = certs;
-  document.getElementById('productStage').innerText = stage || '-';
-  const timeline = document.getElementById('timeline');
-  timeline.innerHTML = '';
-  const stages = ['Vendor','Manufacturer','Logistics','Retail'];
-  stages.forEach(s=>{
-    const el = document.createElement('div'); el.innerText = s; el.style.padding='6px 0'; timeline.appendChild(el);
-  });
+function showProduct({name,origin,certs,stage,iotCount, imageUrl}){
+  const productImage = $('productImage');
+  if (productImage) {
+    productImage.src = imageUrl || DEFAULT_PRODUCT_IMAGE;
+    productImage.alt = `${name} photo`;
+    productImage.classList.remove('hidden');
+  }
+
+  const nameEl = $('productName'); if (nameEl) nameEl.textContent = name;
+  const originEl = $('productOrigin'); if (originEl) originEl.textContent = origin;
+  const certsEl = $('productCerts'); if (certsEl) certsEl.textContent = certs;
+  const stageEl = $('productStage'); if (stageEl) stageEl.textContent = stage || '-';
+
+  const timeline = $('timeline');
+  if (timeline) {
+    timeline.innerHTML = '';
+    TIMELINE_STAGES.forEach((label) => {
+      const node = document.createElement('div');
+      node.className = 'timeline-step';
+      node.textContent = label;
+      timeline.appendChild(node);
+    });
+  }
 }
 
 function renderIoTLogs(logs){
-  const ul = document.getElementById('iotLogs'); ul.innerHTML='';
-  if(!logs || logs.length===0){ ul.innerHTML='<li>No IoT logs available</li>'; return; }
-  logs.forEach(l=>{
+  const list = $('iotLogs');
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (!Array.isArray(logs) || logs.length === 0) {
+    const emptyState = document.createElement('li');
+    emptyState.textContent = 'No IoT logs available yet';
+    list.appendChild(emptyState);
+    return;
+  }
+
+  logs.forEach((log) => {
     const li = document.createElement('li');
-    const d = new Date(l.ts);
-    li.innerHTML = `<div><strong>${l.temp}°C</strong> — ${l.note}</div><div style="font-size:12px;color:#9aa7b2">${d.toLocaleString()}</div>`;
-    ul.appendChild(li);
-  })
+    const tempLine = document.createElement('div');
+    tempLine.className = 'iot-entry-meta';
+    tempLine.innerHTML = `<strong>${log.temp}°C</strong> — ${log.note}`;
+
+    const timeLine = document.createElement('div');
+    timeLine.className = 'iot-entry-time';
+    timeLine.textContent = new Date(log.ts).toLocaleString();
+
+    li.appendChild(tempLine);
+    li.appendChild(timeLine);
+    list.appendChild(li);
+  });
 }
 
 function clearProductUI(){
-  document.getElementById('productName').innerText='Product Name';
-  document.getElementById('productOrigin').innerText='-';
-  document.getElementById('productCerts').innerText='-';
-  document.getElementById('productStage').innerText='-';
-  document.getElementById('iotLogs').innerHTML='';
+  const imageEl = $('productImage');
+  if (imageEl) {
+    imageEl.classList.add('hidden');
+    imageEl.removeAttribute('src');
+  }
+  const resetMap = {
+    productName: 'Product Name',
+    productOrigin: '-',
+    productCerts: '-',
+    productStage: '-'
+  };
+  Object.entries(resetMap).forEach(([id, value]) => {
+    const el = $(id);
+    if (el) el.textContent = value;
+  });
+
+  const timeline = $('timeline'); if (timeline) timeline.innerHTML = '';
+  const logs = $('iotLogs'); if (logs) logs.innerHTML = '';
 }
 
 function generateQR(){
-  const lot = document.getElementById('lotInput').value.trim();
+  const input = $('lotInput');
+  if (!input) return;
+  const lot = input.value.trim();
   if(!lot) return alert('Enter lot number to generate QR');
-  const container = document.getElementById('qrcode'); container.innerHTML='';
+  const container = $('qrcode'); if (!container) return;
+  container.innerHTML='';
   new QRCode(container, {text:lot,width:160,height:160});
 }
 
 // Basic camera scanning using getUserMedia and canvas -> decode not implemented here; we simulate by reading video frames and trying to use an offscreen library
 let scanning = false; let videoStream;
 async function startCameraScan(){
-  const video = document.getElementById('qrVideo');
+  const video = $('qrVideo');
   video.classList.remove('hidden');
   try{
     videoStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
     video.srcObject = videoStream; video.play(); scanning = true;
     // Very simple polling: let user visually read the code; in demo, stop after 10s
-    setTimeout(()=>{ stopCameraScan(); alert('Camera scan demo: please type the lot shown on product packaging into the input'); }, 10000);
+    setTimeout(()=>{ stopCameraScan(); alert('Camera scan demo: please type the lot shown on product packaging into the input'); }, CAMERA_TIMEOUT_MS);
   }catch(e){alert('Camera unavailable or permission denied')}
 }
 
-function stopCameraScan(){ if(videoStream){ videoStream.getTracks().forEach(t=>t.stop()); } const video=document.getElementById('qrVideo'); video.classList.add('hidden'); scanning=false; }
+function stopCameraScan(){ if(videoStream){ videoStream.getTracks().forEach(t=>t.stop()); } const video=$('qrVideo'); if(video) video.classList.add('hidden'); scanning=false; }
 
 function simulateIoT(){
-  const lot = document.getElementById('lotInput').value.trim(); if(!lot) return alert('Enter lot number first');
-  const temp = -15 - Math.floor(Math.random()*6); const note = ['Packed','In Cold Storage','Transit','Delivered'][Math.floor(Math.random()*4)];
+  const lotInput = $('lotInput');
+  if (!lotInput) return;
+  const lot = lotInput.value.trim();
+  if(!lot) return alert('Enter lot number first');
+  const temp = -15 - Math.floor(Math.random()*6);
+  const note = DEMO_IOT_NOTES[Math.floor(Math.random()*DEMO_IOT_NOTES.length)];
 
   if(CONTRACT_ADDRESS && contract && accounts && accounts[0]){
     if (contractMode === 'extended'){
@@ -281,13 +461,25 @@ function simulateIoT(){
 }
 
 function addDemoIoT(lot,temp,note){
-  if(!DEMO_PRODUCTS[lot]) DEMO_PRODUCTS[lot]={name:lot,origin:'Unknown',certifications:'-',stage:'Unknown',iot:[]};
+  if(!DEMO_PRODUCTS[lot]){
+    DEMO_PRODUCTS[lot] = {
+      name: lot,
+      origin: 'Unknown',
+      certifications: '-',
+      stage: 'Unknown',
+      iot: [],
+      imageUrl: DEFAULT_PRODUCT_IMAGE
+    };
+  }
   DEMO_PRODUCTS[lot].iot.push({ts:Date.now(),temp,temp,note});
   renderIoTLogs(DEMO_PRODUCTS[lot].iot.slice(-10).map(x=>({ts:x.ts,temp:x.temp,note:x.note})));
 }
 
 function consumerScan(){
-  const lot = document.getElementById('lotInput').value.trim(); if(!lot) return alert('Enter lot number');
+  const lotInput = $('lotInput');
+  if (!lotInput) return;
+  const lot = lotInput.value.trim();
+  if(!lot) return alert('Enter lot number');
   // award local session points. Simple contract supports on-chain consumerScan, but extended contract does not include consumerScan
   // compute base and badge bonus (awardBadgesIfAny now returns a bonus integer)
   const basePoints = 10;
@@ -318,20 +510,41 @@ function consumerScan(){
   renderLeaderboardWith(LEADERBOARD);
 }
 
-function updateSessionPoints(){ document.getElementById('sessionPoints').innerText = sessionPoints; }
+function updateSessionPoints(){ const el = $('sessionPoints'); if (el) el.textContent = sessionPoints; }
 
 function renderLeaderboard(){
   renderLeaderboardWith(LEADERBOARD);
 }
 
 function renderLeaderboardWith(list){
-  const ul = document.getElementById('leaderboardList'); ul.innerHTML='';
+  const container = $('leaderboardList');
+  if (!container) return;
+  container.innerHTML='';
   const sorted = (list || []).slice().sort((a,b)=> (b.points||0) - (a.points||0));
-  sorted.slice(0,20).forEach(p=>{
+  sorted.slice(0,20).forEach((entry)=>{
     const li = document.createElement('li');
-    const badgesHtml = (p.badges || []).map(b=>`<span class="lb-badge">${b}</span>`).join(' ');
-    li.innerHTML = `<div class="lb-row"><div class="lb-name">${p.name} ${badgesHtml}</div><div class="lb-points">${p.points}</div></div>`;
-    ul.appendChild(li);
+    const row = document.createElement('div');
+    row.className = 'lb-row';
+
+    const nameCell = document.createElement('div');
+    nameCell.className = 'lb-name';
+    nameCell.textContent = entry.name;
+
+    (entry.badges || []).forEach((badge)=>{
+      const badgeChip = document.createElement('span');
+      badgeChip.className = 'lb-badge';
+      badgeChip.textContent = badge;
+      nameCell.appendChild(badgeChip);
+    });
+
+    const pointsCell = document.createElement('div');
+    pointsCell.className = 'lb-points';
+    pointsCell.textContent = entry.points;
+
+    row.appendChild(nameCell);
+    row.appendChild(pointsCell);
+    li.appendChild(row);
+    container.appendChild(li);
   });
 }
 
@@ -376,22 +589,32 @@ async function login(username,password){
   if(store[username] && store[username].password === password){ currentUser={username,id:username}; currentUser.id = username; localStorage.setItem('rpf_user', JSON.stringify(currentUser)); onLoginSuccess(currentUser);} else { alert('Invalid credentials'); }
 }
 
-function logout(){ currentUser=null; localStorage.removeItem('rpf_user'); document.getElementById('welcomeUser').innerText='Guest'; document.getElementById('logoutBtn').classList.add('hidden'); renderLeaderboardWith(LEADERBOARD); }
+function logout(){
+  currentUser=null;
+  localStorage.removeItem('rpf_user');
+  const welcome = $('welcomeUser'); if (welcome) welcome.textContent='Guest';
+  const logoutBtn = $('logoutBtn'); if (logoutBtn) logoutBtn.classList.add('hidden');
+  renderLeaderboardWith(LEADERBOARD);
+}
 
-function onLoginSuccess(user){ document.getElementById('welcomeUser').innerText = user.username; document.getElementById('logoutBtn').classList.remove('hidden'); loadUserLeaderboard(); }
+function onLoginSuccess(user){
+  const welcome = $('welcomeUser'); if (welcome) welcome.textContent = user.username;
+  const logoutBtn = $('logoutBtn'); if (logoutBtn) logoutBtn.classList.remove('hidden');
+  loadUserLeaderboard();
+}
 
 function openAuthModal(mode){
-  const modal = document.getElementById('authModal');
+  const modal = $('authModal');
   if(!modal) return;
   modal.classList.remove('hidden');
   modal.dataset.mode = mode;
-  document.getElementById('authUsername').value = '';
-  document.getElementById('authPassword').value = '';
-  document.getElementById('authTitle').innerText = mode === 'signup' ? 'Create account' : 'Login';
+  const usernameField = $('authUsername'); if (usernameField) usernameField.value = '';
+  const passwordField = $('authPassword'); if (passwordField) passwordField.value = '';
+  const title = $('authTitle'); if (title) title.textContent = mode === 'signup' ? 'Create account' : 'Login';
 }
 
 function closeAuthModal(){
-  const modal = document.getElementById('authModal'); if(!modal) return; modal.classList.add('hidden');
+  const modal = $('authModal'); if(!modal) return; modal.classList.add('hidden');
 }
 
 async function loadUserLeaderboard(){
@@ -428,9 +651,15 @@ async function persistLeaderboardEntry(entry){
 }
 
 function renderBadges(){
-  const badges = ['Sustainable Product','Farm Fresh','Cold Chain Champion'];
-  const wrap = document.getElementById('badgesList'); wrap.innerHTML='';
-  badges.forEach(b=>{ const d = document.createElement('div'); d.className='badge'; d.innerText=b; wrap.appendChild(d); });
+  const wrap = $('badgesList');
+  if (!wrap) return;
+  wrap.innerHTML='';
+  BADGE_LIBRARY.forEach((badgeLabel)=>{
+    const chip = document.createElement('div');
+    chip.className='badge';
+    chip.textContent=badgeLabel;
+    wrap.appendChild(chip);
+  });
 }
 
 function awardBadgesIfAny(lot){

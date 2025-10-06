@@ -2,6 +2,14 @@
 
 This repository is a demo traceability system for frozen-food items. It includes a Solidity contract and a Web3-enabled frontend with QR generation, IoT simulation, badges and a leaderboard. The frontend supports an in-page Login / Sign Up modal and can persist users/leaderboard to a cloud JSON store (MockAPI/JSONBin) or to browser localStorage.
 
+Latest UX polish highlights:
+
+- Refined dark theme with glassmorphism cards, upgraded typography (Inter & Poppins), and animated elements.
+- Live connection status pill in the top bar indicating wallet and contract health (demo mode, warnings, successes).
+- Product hero images that auto-load when you look up a lot (demo images + fallback map for on-chain data).
+- Cleaner DOM structure (no inline styles, reusable classes) and safer rendering for IoT logs and leaderboard rows.
+- Repository decluttered—legacy Remix artifacts and unused tests were removed for a lighter footprint.
+
 This README includes step-by-step setup and testing instructions.
 
 ---
@@ -80,6 +88,7 @@ main().catch(e=>{ console.error(e); process.exit(1); });
 - Edit `d:\SemV\BlockChain\capstone-blockchain\app.js`.
 - Set `CONTRACT_ADDRESS` to your deployed contract address (or leave empty to run demo mode).
 - Optionally set `API_BASE_URL` to your MockAPI/JSONBin base URL to enable cloud persistence.
+- (Optional) Add or update product images by editing the `PRODUCT_IMAGE_MAP` constant—unknown names fall back to a neutral hero photo.
 
 At the top of `app.js`:
 
@@ -90,8 +99,9 @@ const API_BASE_URL = ""; // e.g. https://xxxxx.mockapi.io (optional)
 
 Notes about contract detection and wallet behavior
 
+- The connection status pill (top-right) combines wallet + contract info: e.g., *Wallet: 0xABC…123 • Contract: simple ABI ready*. Color shifts indicate success/warning/error conditions.
 - The frontend performs runtime detection between two supported ABIs (simple vs extended). If a `CONTRACT_ADDRESS` is provided the app will attempt safe, read-only calls to decide which ABI to use. If detection fails the app falls back to the browser demo data.
-- The Connect Wallet button requests accounts from MetaMask. The app listens for `accountsChanged` and `chainChanged` events. On a network change the page reloads to re-initialize the contract detection and web3 state.
+- The Connect Wallet button requests accounts from MetaMask. The app listens for `accountsChanged` and `chainChanged` events. On accounts disconnect, the status pill reverts to demo mode guidance; on a network change the page reloads to re-initialize web3 state.
 
 4) (Optional) Create a MockAPI project for cloud persistence
 
@@ -111,7 +121,7 @@ If API calls fail or `API_BASE_URL` is empty, the app uses localStorage keys: `r
 
 - Start the local server and open the page in a browser.
 - Click Login or Sign Up (in the top-left of the main card) and create an account.
-- Enter `LOT-1001` or `LOT-2002` and click Lookup to view a demo product and IoT logs.
+- Enter `LOT-1001` or `LOT-2002` and click Lookup to view a demo product, IoT logs, and a contextual product image.
 - Click Generate QR, Simulate IoT Log, and "I'm a Consumer — Scan" to award points and update the leaderboard.
 - If `API_BASE_URL` is configured, leaderboard entries are POSTed to the remote API; otherwise they are saved in `localStorage`.
 
@@ -139,5 +149,11 @@ Security notes & next steps
 
 - This demo stores passwords in plaintext when using MockAPI/localStorage — suitable only for demos. For production, implement proper authentication (token-based, hashed passwords) and a secure backend.
 - Suggested next work: add jsQR live decoding, add a small backend for secure accounts & leaderboard, or add a Hardhat project inside the repo for repeatable testing.
+
+Repository housekeeping
+
+- Removed Remix VM snapshots, Remix test dependencies, and scaffold tests to keep version control clean. Artifacts needed at runtime remain under `artifacts/`.
+- CSS now defines reusable classes for modal actions, product images, timeline steps, and connection badges—feel free to extend styling there.
+- The frontend JavaScript centralizes DOM lookups (`const $ = id => ...`) and connection status messaging, making it simpler to wire additional UI states.
 
 If you want, I'll implement one of the suggested next steps (jsQR, MockAPI wiring, or Hardhat example) — tell me which and I will follow up with code changes.
