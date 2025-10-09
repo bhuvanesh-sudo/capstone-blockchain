@@ -4,30 +4,42 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Rich Products — Frozen Food Traceability</title>
+
+  <!-- Fonts & Styles -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Poppins:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+
+  <!-- Libraries -->
   <script src="https://cdn.jsdelivr.net/npm/web3@1.10.0/dist/web3.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script> <!-- ✅ added live QR decoder -->
 </head>
+
 <body>
+  <!-- ===== HEADER ===== -->
   <header class="topbar">
     <div class="brand">Rich Products</div>
     <div class="tag">From farm to fork — complete visibility</div>
-    <div id="connectionStatus" class="connection-status" aria-live="polite">Wallet: not detected • Contract: demo mode</div>
+    <div id="connectionStatus" class="connection-status" aria-live="polite">
+      Wallet: not detected • Contract: demo mode
+    </div>
     <button id="connectBtn" class="btn">Connect Wallet</button>
   </header>
 
+  <!-- ===== HERO ===== -->
   <section class="hero">
-    <img src="https://images.unsplash.com/photo-1506806732259-39c2d0268443?auto=format&fit=crop&w=1600&q=60" alt="Frozen food" />
+    <img src="https://images.unsplash.com/photo-1506806732259-39c2d0268443?auto=format&fit=crop&w=1600&q=60" alt="Frozen food hero">
     <div class="hero-text">
       <h1>Frozen Food Traceability</h1>
-      <p>Complete visibility across the supply chain — farm to fork. Scan or enter lot numbers to view history, temperature logs and certifications.</p>
+      <p>Track and verify the journey of frozen food items across the supply chain with blockchain transparency.</p>
     </div>
   </section>
 
+  <!-- ===== MAIN ===== -->
   <main class="container large">
+    <!-- === LEFT: lookup + product === -->
     <section class="left">
       <div class="card search-card">
         <div class="auth-row">
@@ -71,6 +83,7 @@
       </div>
     </section>
 
+    <!-- === RIGHT: leaderboard + badges + about === -->
     <aside class="right">
       <div class="card leaderboard">
         <h3>Leaderboard</h3>
@@ -85,32 +98,33 @@
 
       <div class="card about">
         <h4>About</h4>
-        <p>Demo integrates a Solidity contract (optional). Use MetaMask to interact or try the simulated demo mode.</p>
-  <small>Contract file: <code>FoodTraceability.sol</code></small>
+        <p>Powered by a Solidity smart contract and Web3 integration. Works both in demo mode and on-chain.</p>
+        <small>Contract file: <code>FoodTraceability.sol</code></small>
       </div>
     </aside>
   </main>
 
-  <footer class="footer">© Rich Products — Demo</footer>
+  <footer class="footer">© 2025 Rich Products — Blockchain Traceability Demo</footer>
   
-    <!-- Auth modal -->
-    <div id="authModal" class="modal hidden" aria-hidden="true">
-      <div class="modal-backdrop" id="authBackdrop"></div>
-      <div class="modal-panel">
-        <h3 id="authTitle">Login</h3>
-        <form id="authForm">
-          <label for="authUsername">Username</label>
-          <input id="authUsername" name="username" type="text" autocomplete="username" required />
-          <label for="authPassword">Password</label>
-          <input id="authPassword" name="password" type="password" autocomplete="current-password" required />
-          <div class="row modal-actions">
-            <button id="authSubmit" class="btn primary">Submit</button>
-            <button id="authCancel" type="button" class="btn">Cancel</button>
-          </div>
-        </form>
-      </div>
+  <!-- ===== AUTH MODAL ===== -->
+  <div id="authModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop"></div>
+    <div class="modal-panel">
+      <h3 id="authTitle">Login</h3>
+      <form id="authForm">
+        <label for="authUsername">Username</label>
+        <input id="authUsername" name="username" type="text" autocomplete="username" required />
+        <label for="authPassword">Password</label>
+        <input id="authPassword" name="password" type="password" autocomplete="current-password" required />
+        <div class="row modal-actions">
+          <button id="authSubmit" class="btn primary">Submit</button>
+          <button id="authCancel" type="button" class="btn">Cancel</button>
+        </div>
+      </form>
     </div>
+  </div>
 
-    <script src="app.js"></script>
+  <!-- ===== APP SCRIPT ===== -->
+  <script src="app.js"></script>
 </body>
 </html>
